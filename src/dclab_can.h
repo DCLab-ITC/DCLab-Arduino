@@ -80,7 +80,8 @@ void dclab_controller_servo(uint16_t can_id, const float position[4], dclab_can_
 void dclab_controller_digital(uint16_t can_id, uint8_t digital_mask, uint8_t solenoid_mask,
     dclab_can_frame_t *out);
 
-/* --- Swerve module --- */
+/* --- Swerve module (V1 Swerve Controller only; the V2 Motor Controller uses
+ *     the Smart Driver functions above) --- */
 void dclab_swerve_command(uint16_t can_id, float steering_rad, float wheel_rad_s, dclab_can_frame_t *out);
 bool dclab_swerve_feedback(const dclab_can_frame_t *frame, float *steering_rad, float *wheel_rad_s);
 

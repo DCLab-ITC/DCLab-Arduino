@@ -38,6 +38,8 @@ The core (`src/dclab_can.h`, `src/dclab_can.c`) is plain C99 and has no hardware
 - `dclab_encoder_positions()` returns 1 or 2 positions.
 - The boards no longer send speed. `dclab_speed_update()` computes it from successive positions.
 
+**Motor Controller (V2, replaces the Swerve Controller):** it uses exactly the Smart Driver's frames. Use `dclab_smart_driver_command` (one channel on its receive ID, DLC 4) or `dclab_smart_driver_pair_command` (two channels sharing a receive ID, DLC 8) and decode its positions with the encoder feedback functions on each channel's transmit ID. The `dclab_swerve_*` functions are for the V1 Swerve Controller only.
+
 **Unchanged from V1:** the Sensor digital/analog frame (`dclab_sensor_inputs`), the Controller PWM, servo, digital and solenoid frames, the Swerve frames and the IMU quaternion.
 
 **Boards still on V1 firmware:** use `dclab_smart_driver_command_v1()` and `dclab_encoder_feedback_v1()`.
