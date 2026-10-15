@@ -1,8 +1,9 @@
 # DCLab Arduino / STM32 library
 
-This library builds commands for the DCLab boards and decodes their feedback. It covers the Smart Driver, Sensor, Controller, Swerve module, Absolute Encoder and IMU. It targets DCLab **V2 firmware**:
+This library builds commands for the DCLab boards and decodes their feedback. It covers the Smart Driver, Motor Controller, Sensor, Controller, Swerve module, Absolute Encoder and IMU. It targets DCLab **V2 firmware**:
 
-- Smart Driver 2.6+
+- Smart Driver 2.13+
+- Motor Controller 2.22+
 - Sensor 2.7+
 - Absolute Encoder 2.5+
 
@@ -19,35 +20,48 @@ The core (`src/dclab_can.h`, `src/dclab_can.c`) is plain C99 and has no hardware
 
 ## Frame formats (V2)
 
-**Smart Driver command.** Each motor takes 4 bytes: a little-endian `uint32` word.
+**Motor command (Smart Driver and Motor Controller).** `dclab_motor_command()` builds the frame for the motors on one receive ID:
 
-- Bits 3..0 are the mode:
-  - `DCLAB_MODE_VOLTAGE` (V)
+```c
+dclab_motor_command_t c = {0};
+c.can_id = 101;
+c.m1_enable = true;  c.mode1 = DCLAB_MODE_VOLTAGE; c.goal1 = 3.0f;
+c.m2_enable = true;  c.mode2 = DCLAB_MODE_SPEED;   c.goal2 = -2.0f;
+dclab_can_frame_t f;
+if (dclab_motor_command(&c, &f)) { /* send f.id, f.dlc, f.data */ }
+```
+
+- M1 and M2 are the first and second motor on `can_id`: the lower-numbered motor (or Motor Controller channel) is M1. A motor alone on its ID is M1.
+- `m1_enable` alone gives DLC 4. `m2_enable` gives DLC 8; if `m1_enable` is false, M1's half is disabled and M1 keeps its command.
+- It returns false when neither motor is enabled, `can_id` is above `0x7FF`, or an enabled motor has an unknown mode or a goal that is not finite.
+- If you enable M2 on an ID that has only one motor, the board ignores the frame.
+- Modes:
+  - `DCLAB_MODE_VOLTAGE` (V; on the Motor Controller, its motor's voltage or current)
   - `DCLAB_MODE_POSITION` (rad)
   - `DCLAB_MODE_SPEED` (rad/s)
   - `DCLAB_MODE_POSITION_RAMP`, `…_SPEED_RAMP`, `…_VOLTAGE_RAMP`: the goal is a ramp rate. It lasts until the board restarts.
-- Bits 31..4 are the goal: a `float32` without its 4 lowest mantissa bits, which leaves about 6 significant digits.
-- If the two motors have **different** receive IDs, each motor's ID takes a DLC 4 frame (`dclab_smart_driver_command`).
-- If they have the **same** receive ID, one DLC 8 frame carries motor 1 in bytes 0-3 and motor 2 in bytes 4-7 (`dclab_smart_driver_pair_command`).
-- To stop a motor, send voltage 0.
+- To stop a motor, send voltage 0. A disabled motor is not stopped.
 - Keep sending commands: a motor stops after its CAN timeout.
 
-**Encoder feedback.** This covers Smart Driver motors, Sensor encoders and the Absolute Encoder. Each encoder sends a `float32` position in 4 bytes.
+On the bus, each motor takes 4 bytes: a little-endian `uint32` word. Bits 2..0 are the mode, bit 3 is the enable flag (`DCLAB_MOTOR_ENABLE`) and bits 31..4 are the goal, a `float32` without its 4 lowest mantissa bits (about 6 significant digits). DLC 4 carries M1; DLC 8 carries M1 in bytes 0-3 and M2 in bytes 4-7. A word without the enable flag is skipped.
+
+**Encoder feedback.** This covers Smart Driver motors, Motor Controller channels, Sensor encoders and the Absolute Encoder. Each encoder sends a `float32` position in 4 bytes.
 
 - Two encoders that share a transmit ID send one DLC 8 frame. The lower-numbered encoder comes first, and both are sampled at the same instant.
 - `dclab_encoder_positions()` returns 1 or 2 positions.
 - The boards no longer send speed. `dclab_speed_update()` computes it from successive positions.
 
-**Motor Controller (V2, replaces the Swerve Controller):** it uses exactly the Smart Driver's frames. Use `dclab_smart_driver_command` (one channel on its receive ID, DLC 4) or `dclab_smart_driver_pair_command` (two channels sharing a receive ID, DLC 8) and decode its positions with the encoder feedback functions on each channel's transmit ID. The `dclab_swerve_*` functions are for the V1 Swerve Controller only.
+**Motor Controller (V2, replaces the Swerve Controller):** use `dclab_motor_command` on each channel's receive ID (up to two channels per ID) and decode its positions with the encoder feedback functions on each channel's transmit ID. The `dclab_swerve_*` functions are for the V1 Swerve Controller only.
+
+These formats need Smart Driver 2.13 and Motor Controller 2.22 or later. Older boards ignore these commands, and these boards ignore commands from older versions of this library, so update both together.
 
 **Unchanged from V1:** the Sensor digital/analog frame (`dclab_sensor_inputs`), the Controller PWM, servo, digital and solenoid frames, the Swerve frames and the IMU quaternion.
-
-**Boards still on V1 firmware:** use `dclab_smart_driver_command_v1()` and `dclab_encoder_feedback_v1()`.
 
 ## Changes from the SmartDriver library 1.0
 
 - The library now covers every DCLab board, not just the Smart Driver, and the V2 formats.
 - The core no longer depends on Arduino, so it runs on STM32 as well.
+- One motor command for the Smart Driver and the Motor Controller (`dclab_motor_command`) replaces `dclab_smart_driver_command` and `dclab_smart_driver_pair_command`. The V1 functions were removed.
 - The 1.0 class left `positionMode` uninitialised; the C functions here have no hidden state.
 
 ## Test

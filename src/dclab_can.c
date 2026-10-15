@@ -23,31 +23,26 @@ static void frame(dclab_can_frame_t *out, uint32_t id, uint8_t dlc) {
 }
 
 uint32_t dclab_motor_word(uint8_t mode, float goal) {
-    return (float_bits(goal) & ~0xFUL) | (mode & 0xFU);
+    return (float_bits(goal) & ~0xFUL) | DCLAB_MOTOR_ENABLE | (mode & 0x7U);
 }
 
-void dclab_motor_word_decode(uint32_t word, uint8_t *mode, float *goal) {
-    if (mode) *mode = (uint8_t)(word & 0xFU);
+bool dclab_motor_word_decode(uint32_t word, uint8_t *mode, float *goal) {
+    if (mode) *mode = (uint8_t)(word & 0x7U);
     if (goal) *goal = bits_float(word & ~0xFUL);
+    return (word & DCLAB_MOTOR_ENABLE) != 0U;
 }
 
 static bool command_ok(uint8_t mode, float goal) {
     return mode <= DCLAB_MODE_VOLTAGE_RAMP && finite(goal);
 }
 
-bool dclab_smart_driver_command(uint16_t can_id, uint8_t mode, float goal, dclab_can_frame_t *out) {
-    if (out == NULL || !command_ok(mode, goal)) return false;
-    frame(out, can_id, 4U);
-    put_u32(out->data, dclab_motor_word(mode, goal));
-    return true;
-}
-
-bool dclab_smart_driver_pair_command(uint16_t can_id, uint8_t mode1, float goal1,
-    uint8_t mode2, float goal2, dclab_can_frame_t *out) {
-    if (out == NULL || !command_ok(mode1, goal1) || !command_ok(mode2, goal2)) return false;
-    frame(out, can_id, 8U);
-    put_u32(&out->data[0], dclab_motor_word(mode1, goal1));
-    put_u32(&out->data[4], dclab_motor_word(mode2, goal2));
+bool dclab_motor_command(const dclab_motor_command_t *c, dclab_can_frame_t *out) {
+    if (c == NULL || out == NULL || c->can_id > 0x7FFU || (!c->m1_enable && !c->m2_enable)) return false;
+    if ((c->m1_enable && !command_ok(c->mode1, c->goal1)) ||
+        (c->m2_enable && !command_ok(c->mode2, c->goal2))) return false;
+    frame(out, c->can_id, c->m2_enable ? 8U : 4U);
+    put_u32(&out->data[0], c->m1_enable ? dclab_motor_word(c->mode1, c->goal1) : 0U);
+    if (c->m2_enable) put_u32(&out->data[4], dclab_motor_word(c->mode2, c->goal2));
     return true;
 }
 
@@ -138,20 +133,5 @@ bool dclab_imu_quaternion(const dclab_can_frame_t *f, float wxyz[4]) {
         float magnitude = (float)(((hi & 0x7FU) << 8) | lo) / 32767.0f;
         wxyz[i] = (hi & 0x80U) ? -magnitude : magnitude;
     }
-    return true;
-}
-
-void dclab_smart_driver_command_v1(uint16_t can_id, float goal, bool position, bool speed,
-    bool voltage, bool stop, bool reset, dclab_can_frame_t *out) {
-    frame(out, can_id, 8U);
-    out->data[0] = (uint8_t)((position ? 1U : 0U) | (speed ? 2U : 0U) | (voltage ? 4U : 0U) |
-                             (stop ? 8U : 0U) | (reset ? 16U : 0U));
-    put_f32(&out->data[2], goal);
-}
-
-bool dclab_encoder_feedback_v1(const dclab_can_frame_t *f, float *position, float *speed) {
-    if (f == NULL || f->extended || f->dlc != 8U) return false;
-    if (position) *position = get_f32(&f->data[0]);
-    if (speed) *speed = get_f32(&f->data[4]);
     return true;
 }

@@ -1,7 +1,9 @@
-// Both Smart Driver motors on ONE receive ID: one 8-byte frame, motor 1 in
-// bytes 0-3, motor 2 in bytes 4-7 (set both Motor IDs to the same value).
-// Their position feedback then also shares one ID (8 bytes, motor 1 first)
-// when both Encoder Transmit IDs are equal.
+// Two motors on ONE receive ID (both Smart Driver motors, or two Motor
+// Controller channels): M1 = the lower-numbered motor, M2 = the other.
+// Both enabled: one 8-byte frame. m2_enable alone: 8 bytes with M1's half
+// disabled, so M1 keeps its command. m1_enable alone: 4 bytes.
+// Their position feedback shares one ID too (8 bytes, motor 1 first) when
+// both transmit IDs are equal.
 #include <SPI.h>
 #include <mcp2515.h>
 #include <DCLab.h>
@@ -19,13 +21,22 @@ void setup() {
 }
 
 void loop() {
+  dclab_motor_command_t c = {};
+  c.can_id = MOTORS_ID;
+  c.m1_enable = true;
+  c.mode1 = DCLAB_MODE_SPEED;
+  c.goal1 = 5.0f;
+  c.m2_enable = true;
+  c.mode2 = DCLAB_MODE_POSITION;
+  c.goal2 = 3.14f;
   dclab_can_frame_t f;
-  dclab_smart_driver_pair_command(MOTORS_ID, DCLAB_MODE_SPEED, 5.0f, DCLAB_MODE_POSITION, 3.14f, &f);
-  struct can_frame m;
-  m.can_id = f.id;
-  m.can_dlc = f.dlc;
-  memcpy(m.data, f.data, f.dlc);
-  mcp2515.sendMessage(&m);
+  if (dclab_motor_command(&c, &f)) {
+    struct can_frame m;
+    m.can_id = f.id;
+    m.can_dlc = f.dlc;
+    memcpy(m.data, f.data, f.dlc);
+    mcp2515.sendMessage(&m);
+  }
 
   struct can_frame r;
   while (mcp2515.readMessage(&r) == MCP2515::ERROR_OK) {

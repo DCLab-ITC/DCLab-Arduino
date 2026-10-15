@@ -35,12 +35,13 @@ bool dclab_can_receive(dclab_can_frame_t *f) {
     return h.RTR == CAN_RTR_DATA;
 }
 
-/* Example: drive a Smart Driver motor at 5 rad/s and read its position. */
+/* Example: drive a motor alone on receive ID 1 (M1) at 5 rad/s and read its
+ * position. */
 void dclab_example_loop(void) {
     static dclab_speed_t speed;
+    const dclab_motor_command_t command = {1U, true, DCLAB_MODE_SPEED, 5.0f, false, 0U, 0.0f};
     dclab_can_frame_t f;
-    dclab_smart_driver_command(1, DCLAB_MODE_SPEED, 5.0f, &f);
-    (void)dclab_can_send(&f);
+    if (dclab_motor_command(&command, &f)) (void)dclab_can_send(&f);
     while (dclab_can_receive(&f)) {
         float p[2];
         if (f.id == 101 && dclab_encoder_positions(&f, p) >= 1) {
