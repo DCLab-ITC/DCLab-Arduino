@@ -1,0 +1,2 @@
+update.cmd text eol=crlf
+*.sh text eol=lf

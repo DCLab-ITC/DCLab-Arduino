@@ -18,6 +18,12 @@ The core (`src/dclab_can.h`, `src/dclab_can.c`) is plain C99 and has no hardware
 1. Sketch → Include Library → Add .ZIP Library… and pick `DCLab-Arduino.zip`, or clone this repository into `~/Arduino/libraries/DCLab`.
 2. Install "arduino-mcp2515" (autowp) from the Library Manager for the examples.
 
+## Update
+
+Run `update.sh` (Linux, macOS) or double-click `update.cmd` (Windows) in the library's folder
+(`Arduino/libraries/DCLab`). It downloads the latest version from GitHub and replaces the folder (a
+git clone is pulled instead). Then restart the Arduino IDE.
+
 ## Frame formats (V2)
 
 **Motor command (Smart Driver and Motor Controller).** `dclab_motor_command()` builds the frame for the motors on one receive ID:
